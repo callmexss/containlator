@@ -17,15 +17,15 @@ sysctl -p
 
 echo "create all containers"
 
-docker run --privileged=true --net none --name aix -d ${imagename}
-docker run --privileged=true --net none --name solaris -d ${imagename}
-docker run --privileged=true --net none --name gemini -d ${imagename}
-docker run --privileged=true --net none --name gateway -d ${imagename}
-docker run --privileged=true --net none --name netb -d ${imagename}
-docker run --privileged=true --net none --name sun -d ${imagename}
-docker run --privileged=true --net none --name svr4 -d ${imagename}
-docker run --privileged=true --net none --name bsdi -d ${imagename}
-docker run --privileged=true --net none --name slip -d ${imagename}
+docker run --privileged=true --net none --name aix -d ${imagename} bash
+docker run --privileged=true --net none --name solaris -d ${imagename} bash
+docker run --privileged=true --net none --name gemini -d ${imagename} bash
+docker run --privileged=true --net none --name gateway -d ${imagename} bash
+docker run --privileged=true --net none --name netb -d ${imagename} bash
+docker run --privileged=true --net none --name sun -d ${imagename} bash
+docker run --privileged=true --net none --name svr4 -d ${imagename} bash
+docker run --privileged=true --net none --name bsdi -d ${imagename} bash
+docker run --privileged=true --net none --name slip -d ${imagename} bash
 
 #创建两个网桥，代表两个二层网络
 echo "create bridges"
