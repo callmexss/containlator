@@ -26,7 +26,7 @@ CFG_FOLDER = "opennet-config"
 BSE_NAME = "mynode"
 SED_NAME = "seednode"
 IMG_VERSION = 0.4
-FRIEND_RATE = 0.3
+FRIEND_RATE = 0.05
 
 
 pattern = re.compile("inet addr:[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+")
@@ -90,6 +90,21 @@ class DockerWorker:
         os.system(f"docker cp {c.name}:/fred/myref.fref {CFG_FOLDER}/{c.name}.txt")
         os.system(f"cat {CFG_FOLDER}/{c.name}.txt > seednodes.fref")
 
+    def get_node_file_from_container_to_host(self, name, cfg="darknet-config"):
+        c = self.get_container_by_name(name)
+        c.exec_run("wget http://127.0.0.1:8888/friends/myref.txt -O /fred/myref-dark.fref")
+        os.system(f"docker cp {c.name}:/fred/myref-dark.fref {cfg}/{c.name}.txt")
+
+    def send_node_files_to_container(self, cfg="darknet-config"):
+        for name in self.get_containers_with_name():
+            os.system(f"docker cp {cfg} {name}:/fred/")
+
+    def get_all_node_files(self):
+        containers = self.get_containers_with_name()
+        for name in containers:
+            print(name)
+            self.get_node_file_from_container_to_host(name)
+
     def get_all_seednode_files(self):
         containers = self.get_containers_with_name()
         for name in containers:
@@ -139,12 +154,45 @@ class DockerWorker:
             print(f"Shutdown freenet in {container.name}")
             os.system(f'docker exec -it {container.name} /bin/su -c "/fred/run.sh stop" - tester')
 
+    def connect(self, model, cfg="darknet-config"):
+        for src, dsts in model.items():
+            for dst in dsts:
+                res = src.exec_run(f"python3 /fred/addpeer.py /fred/{cfg}/{dst.name}.txt")
+                print(res)
+                res = dst.exec_run(f"python3 /fred/addpeer.py /fred/{cfg}/{src.name}.txt")
+                print(res)
+                time.sleep(1)
+
+
+class Organizer:
+    def __init__(self, size, nodes):
+        self.size = size
+        self.nodes = nodes
+
+    def generate_model(self):
+        # each node must have at least one neighbor
+        nodes = self.nodes
+        model = defaultdict(list)
+        for name, container in nodes.items():
+            for other_name, other_container in nodes.items():
+                if name != other_name and random.random() < FRIEND_RATE:
+                    model[container].append(other_container)
+
+        print(model)
+        return model
+
 
 if __name__ == "__main__":
     os.system("rm ./opennet-config/*-seednode*")
     dw = DockerWorker()
-    # dw.choose_and_start_seednodes()
+    dw.choose_and_start_seednodes()
     dw.get_all_seednode_files()
     dw.copy_seednodes_fref()
     dw.start_ordinary_nodes()
     # dw.stop_all()
+
+    dw.get_all_node_files()
+    dw.send_node_files_to_container()
+    orz = Organizer(SIZE, dw.get_containers_with_name())
+    model = orz.generate_model()
+    dw.connect(model)

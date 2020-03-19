@@ -1,0 +1,13 @@
+identity=YVLUpPoyd1dfGkis3yP6oPYDPeTFM77Fr1Lp13SlTO8
+lastGoodVersion==RnJlZCwwLjcsMS4wLDE0NzU
+location==MC45MTkwOTU4OTAxODYyMTY0
+myName==RnJlZW5ldCBub2RlIHdpdGggbm8gbmFtZSAjLTE5NTIwMTQyMTgyMzExOTE3Njc
+opennet=false
+sigP256=MEUCIQCR69Lhn4OT3QGWtg5V~kbF59Fz2dtecCslt-wpBVwqEQIgBxlxHp44kU3S7c4jUILeOSA9YddNFgMfzBmk0Qcd~rk
+version==RnJlZCwwLjcsMS4wLDE0Nzg
+ark.number=0
+ark.pubURI=SSK@c7Ilph3LGxDr-~682fBgMe3Lmeu4GUv4s9G6qu9HdeI,zdpanoo8ZvUhiI5GwaILVEflUYHRvaV1eO27wNbxllA,AQACAAE/ark
+auth.negTypes=10
+ecdsa.P256.pub=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAELrXqDp~lRIFPPbxSYWq7x2wvuQI6ViBYjxjD4jYpnQDZGRQO1oN6bMVc5dk9-hvX1vS-iFW-Y7x0btPaIh6AEg
+physical.udp==MTQwLjI1Mi4xLjE4MzoxNjA5MjsxMjcuMC4wLjE6MTYwOTI
+End
