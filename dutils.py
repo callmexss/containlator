@@ -13,20 +13,22 @@ import os
 import re
 import time
 import random
+import pickle
 from collections import defaultdict
 
 import docker
 
 
-SIZE = 20
+SIZE = 12
 SEEDS = 1
 NOD_CFG = "freenet.ini"
 SED_CFG = "seed_freenet.ini"
 CFG_FOLDER = "opennet-config"
 BSE_NAME = "mynode"
 SED_NAME = "seednode"
-IMG_VERSION = 0.4
-FRIEND_RATE = 0.05
+IMG_NAME = "tcpip1604"
+IMG_VERSION = 0.3
+FRIEND_RATE = 0.2
 
 
 pattern = re.compile("inet addr:[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+")
@@ -63,6 +65,10 @@ class DockerStarter:
         # os.system(f"rm {CFG_FOLDER}/mynode*")
         for i in range(1, self.size + 1):
             os.system(f"docker run -it --name {basename}-{i} -d {self.image}:{self.version} bash")
+            os.system(f"docker cp ./exchange/dark_freenet.ini {basename}-{i}:/fred/freenet.ini")
+            os.system(f"docker cp ./replaced_cfg.py {basename}-{i}:/replaced_cfg.py")
+            os.system(f"docker exec -it {basename}-{i} python3 /fred/replaced_cfg.py")
+            os.system(f"docker exec -it {basename}-{i} /fred/start.sh")
 
 
 class DockerWorker:
@@ -74,6 +80,13 @@ class DockerWorker:
 
     def get_container_by_name(self, name):
         return self.get_containers_with_name()[name]
+
+    def get_containers(self):
+        return self.client.containers.list()
+
+    def run_cmd(self, c, cmd):
+        output = c.exec_run(cmd).output.decode()
+        return output
 
     def get_seednode_file_from_container_to_host(self, name):
         c = self.get_container_by_name(name)
@@ -116,28 +129,29 @@ class DockerWorker:
         for name in self.get_containers_with_name():
             os.system(f"docker cp {cfg} {name}:/fred/")
 
+    # FIXME: seednodes.fref has only one `END`
     def choose_and_start_seednodes(self):
         seeds = random.sample(self.client.containers.list(), SEEDS)
         for i, seed in enumerate(seeds):
             os.system(f"docker cp {SED_CFG} {seeds[i].name}:/fred/freenet.ini")
-            os.system(f"docker cp bootstrap.py {seeds[i].name}:/fred/bootstrap.py")
-            os.system(f"docker exec -it {seeds[i].name} python3 /fred/bootstrap.py")
+            os.system(f"docker cp replaced_cfg.py {seeds[i].name}:/fred/bootstrap.py")
+            os.system(f"docker exec -it {seeds[i].name} python3 /fred/replaced_cfg.py")
             os.system(f"docker exec -it {seeds[i].name} /fred/start.sh")
             time.sleep(5)
             seeds[i].rename(f"{seeds[i].name}-{SED_NAME}")
 
-    def start_ordinary_nodes(self):
+    def start_ordinary_nodes(self, ntype="open"):
         containers = self.get_containers_with_name()
         for name in containers:
             if f'{SED_NAME}' not in name:
                 print(name)
-                os.system(f"docker cp freenet.tmp/freenet.ini {name}:/fred/freenet.ini")
+                os.system(f"docker cp exchange/{ntype}_freenet.ini {name}:/fred/freenet.ini")
                 os.system(f"docker cp seednodes.fref {name}:/fred/seednodes.fref")
-                os.system(f"docker cp bootstrap.py {name}:/fred/bootstrap.py")
+                os.system(f"docker cp replaced_cfg.py {name}:/fred/replaced_cfg.py")
                 # os.system(f"docker exec -it {name} cat /fred/seednodes.fref")
-                os.system(f"docker exec -it {name} python3 /fred/bootstrap.py")
+                os.system(f"docker exec -it {name} python3 /fred/replaced_cfg.py")
                 os.system(f"docker exec -it {name} /fred/start.sh")
-                time.sleep(5)
+        time.sleep(10)
 
     def copy_seednodes_fref(self):
         # for each in os.listdir(f"{CFG_FOLDER}"):
@@ -163,6 +177,48 @@ class DockerWorker:
                 print(res)
                 time.sleep(1)
 
+    def opennet_start(self):
+        self.choose_and_start_seednodes()
+        self.get_all_seednode_files()
+        self.copy_seednodes_fref()
+        self.start_ordinary_nodes()
+
+    def stop(self):
+        self.stop_all()
+
+    def darknet_start(self, create=True, model=None):
+        if create:
+            ds = DockerStarter(SIZE, IMG_NAME, IMG_VERSION)
+            ds.create_nodes()
+            time.sleep(10)
+        else:
+            self.start_ordinary_nodes("dark")
+
+        self.get_all_node_files()
+        self.send_node_files_to_container()
+        orz = Organizer(SIZE, self.get_containers_with_name())
+        model = orz.defined_model(model) if model else orz.generate_model()
+        self.connect(model)
+
+    def run_pyscript_in_all_containers(self, script, args):
+        ret = []
+        containers = self.get_containers_with_name()
+        for name, container in containers.items():
+            os.system(f"docker cp {script} {name}:/fred")
+            res = self.run_cmd(container, f"python3 /fred/{os.path.split(script)[-1]} {' '.join(args)}")
+            ret.append((name, eval(res)))
+        return ret
+
+    def get_opennet_typology(self):
+        ret = self.run_pyscript_in_all_containers("scripts/get_peer_info.py", args=["open"])
+        with open("opennet_relation.pkl", "wb") as f:
+            pickle.dump(ret, f)
+
+    def get_darknet_typology(self):
+        ret = self.run_pyscript_in_all_containers("scripts/get_peer_info.py", ["dark"])
+        with open("darknet_relation.pkl", "wb") as f:
+            pickle.dump(ret, f)
+
 
 class Organizer:
     def __init__(self, size, nodes):
@@ -181,18 +237,65 @@ class Organizer:
         print(model)
         return model
 
+    def defined_model(self, relationship):
+        model = defaultdict(list)
+        nodes = self.nodes
+        print(relationship)
+        for k, v in relationship.items():
+            model[nodes[k]].extend([nodes[x] for x in v])
+        print(model)
+        return model
+
 
 if __name__ == "__main__":
     os.system("rm ./opennet-config/*-seednode*")
     dw = DockerWorker()
-    dw.choose_and_start_seednodes()
-    dw.get_all_seednode_files()
-    dw.copy_seednodes_fref()
-    dw.start_ordinary_nodes()
+    # dw.opennet_start()
+
+    model = {
+            "mynode-1": ["mynode-6"],
+            "mynode-2": ["mynode-9", "mynode-6"],
+            "mynode-3": ["mynode-8"],
+            "mynode-4": ["mynode-7", "mynode-5"],
+            "mynode-5": ["mynode-10", "mynode-12"],
+            "mynode-6": ["mynode-3"],
+            "mynode-7": ["mynode-6"],
+            "mynode-8": ["mynode-5", "mynode-9"],
+            "mynode-9": ["mynode-12"],
+            "mynode-10": ["mynode-12"],
+            "mynode-11": ["mynode-1", "mynode-3"],
+            "mynode-12": ["mynode-3"],
+            }
+
+    model = {
+        "mynode-1": ["mynode-6"],
+        "mynode-2": ["mynode-6"],
+        "mynode-3": ["mynode-8"],
+        "mynode-4": ["mynode-7"],
+        "mynode-5": ["mynode-10"],
+        "mynode-6": ["mynode-3"],
+        "mynode-7": ["mynode-6"],
+        "mynode-8": ["mynode-4"],
+        "mynode-9": ["mynode-8"],
+        "mynode-10": ["mynode-12"],
+        "mynode-11": ["mynode-1"],
+        "mynode-12": ["mynode-3"],
+    }
+
+    # dw.darknet_start(create=False)
+    dw.darknet_start(model=model)
+
+    # dw.get_all_seednode_files()
+    # dw.copy_seednodes_fref()
+    # dw.start_ordinary_nodes()
     # dw.stop_all()
 
-    dw.get_all_node_files()
-    dw.send_node_files_to_container()
-    orz = Organizer(SIZE, dw.get_containers_with_name())
-    model = orz.generate_model()
-    dw.connect(model)
+    # dw.get_all_node_files()
+    # dw.send_node_files_to_container()
+    # orz = Organizer(SIZE, dw.get_containers_with_name())
+    # model = orz.generate_model()
+    # dw.connect(model)
+
+    # dw.get_opennet_typology()
+    dw.get_darknet_typology()
+

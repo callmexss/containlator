@@ -17,7 +17,7 @@ RUN apt-get install -y openjdk-8-jre\
                                  tcpdump\
                                  net-tools\
                                  iputils-ping
-RUN pip3 install ipython==5.5.0 pyfreenet==0.4.1 scapy
+RUN pip3 install ipython==5.5.0 pyfreenet==0.4.1 scapy requests
 RUN adduser --disabled-password tester
 RUN chown -R tester:tester /fred
 
