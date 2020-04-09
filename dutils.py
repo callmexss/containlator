@@ -88,6 +88,27 @@ class DockerWorker:
         output = c.exec_run(cmd).output.decode()
         return output
 
+    def copy_from_containers(self, src, dst, folder="./exchange", with_cname=True):
+        for name, _ in self.get_containers_with_name().items():
+            self.copy_from_container(name, src, dst, folder, with_cname)
+
+
+    def copy_from_container(self, name, src, dst, folder, with_cname):
+        if not os.path.exists(folder):
+            select = input(f"`{folder}` not exists, create it?")
+            if select.casefold() == "y":
+                os.system(f"mkdir -p {folder}")
+            else:
+                print("Abort")
+                return
+
+        base_name = os.path.split(src)[-1]
+        if with_cname:
+            dst = name + "-" + base_name
+        print(f"docker cp {name}:{src} {os.path.join(folder, dst)}")
+        os.system(f"docker cp {name}:{src} {os.path.join(folder, dst)}")
+
+
     def get_seednode_file_from_container_to_host(self, name):
         c = self.get_container_by_name(name)
         # res = c.exec_run("python3 -m http.server", detach=True)
@@ -248,6 +269,11 @@ class Organizer:
 
 
 if __name__ == "__main__":
+    # For test
+    dw = DockerWorker()
+    dw.copy_from_containers("/fred/logs", "logs", "./exchange/logs-409", True)
+    exit()
+
     os.system("rm ./opennet-config/*-seednode*")
     dw = DockerWorker()
     # dw.opennet_start()
@@ -283,7 +309,7 @@ if __name__ == "__main__":
     }
 
     # dw.darknet_start(create=False)
-    dw.darknet_start(model=model)
+    # dw.darknet_start(model=model)
 
     # dw.get_all_seednode_files()
     # dw.copy_seednodes_fref()
@@ -296,6 +322,6 @@ if __name__ == "__main__":
     # model = orz.generate_model()
     # dw.connect(model)
 
-    # dw.get_opennet_typology()
-    dw.get_darknet_typology()
+    dw.get_opennet_typology()
+    # dw.get_darknet_typology()
 
